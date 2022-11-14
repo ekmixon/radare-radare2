@@ -153,6 +153,9 @@ R_API bool r_core_bin_set_by_fd(RCore *core, ut64 bin_fd) {
 	return false;
 }
 
+// XXX its not passing the tests!
+#define RUNSCRIPT 0
+
 R_API void r_core_bin_export_info(RCore *core, int mode) {
 	char *flagname = NULL, *offset = NULL;
 	RBinFile *bf = r_bin_cur (core->bin);
@@ -163,35 +166,50 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 	if (!db) {
 		return;
 	}
+	// output must be grouped in 3 blocks, so lets buffer that
+	RStrBuf *s0 = r_strbuf_new ("");
+	RStrBuf *s1 = r_strbuf_new ("");
+	RStrBuf *s2 = r_strbuf_new ("");
+
 	SdbListIter *iter;
 	SdbKv *kv;
+#if RUNSCRIPT
+	r_strbuf_append (s0, "fs format\n");
+#else
 	if (IS_MODE_RAD (mode)) {
-		r_cons_printf ("fs format\n");
+		r_strbuf_append (s0, "fs format\n");
 	} else if (IS_MODE_SET (mode)) {
+		// just run the script, not the api
 		r_flag_space_push (core->flags, "format");
 	}
+#endif
+
 	// iterate over all keys
 	SdbList *ls = sdb_foreach_list (db, false);
 	ls_foreach (ls, iter, kv) {
 		char *k = sdbkv_key (kv);
 		char *v = sdbkv_value (kv);
-		char *dup = strdup (k);
 		//printf ("?e (%s) (%s)\n", k, v);
-		if ((flagname = strstr (dup, ".offset"))) {
-			*flagname = 0;
-			flagname = dup;
+		// 1
+		if ((flagname = strstr (k, ".offset"))) {
+#if RUNSCRIPT
+			r_strbuf_appendf (s0, "f %s @ %s\n", k, v);
+#else
 			if (IS_MODE_RAD (mode)) {
-				r_cons_printf ("f %s @ %s\n", flagname, v);
+				r_strbuf_appendf (s0, "f %s @ %s\n", k, v);
 			} else if (IS_MODE_SET (mode)) {
 				ut64 nv = r_num_math (core->num, v);
-				r_flag_set (core->flags, flagname, nv, 0);
+				r_flag_set (core->flags, k, nv, 0);
 			}
+#endif
 			free (offset);
 			offset = strdup (v);
-		}
-		if (strstr (dup, ".cparse")) {
+		} else if (strstr (k, ".cparse")) {
+#if RUNSCRIPT
+			r_strbuf_appendf (s1, "\"td %s\"\n", v);
+#else
 			if (IS_MODE_RAD (mode)) {
-				r_cons_printf ("\"td %s\"\n", v);
+				r_strbuf_appendf (s1, "\"td %s\"\n", v);
 			} else if (IS_MODE_SET (mode)) {
 				char *code = r_str_newf ("%s;", v);
 				char *errmsg = NULL;
@@ -206,40 +224,30 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 					free (out);
 				}
 			}
-		}
-		free (dup);
-	}
-	R_FREE (offset);
-	ls_foreach (ls, iter, kv) {
-		char *k = sdbkv_key (kv);
-		char *v = sdbkv_value (kv);
-		char *dup = strdup (k);
-		if ((flagname = strstr (dup, ".format"))) {
+#endif
+		} else if ((flagname = strstr (k, ".format"))) {
+		// 2
 			*flagname = 0;
 			if (!offset) {
 				offset = strdup ("0");
 			}
-			flagname = dup;
+#if RUNSCRIPT
+			r_strbuf_appendf (s1, "pf.%s %s\n", k, v);
+#else
 			if (IS_MODE_RAD (mode)) {
-				r_cons_printf ("pf.%s %s\n", flagname, v);
+				r_strbuf_appendf (s1, "pf.%s %s\n", k, v);
 			} else if (IS_MODE_SET (mode)) {
-				sdb_set (core->print->formats, flagname, v, 0);
+				sdb_set (core->print->formats, k, v, 0);
 			}
-		}
-		free (dup);
-	}
-	ls_foreach (ls, iter, kv) {
-		char *k = sdbkv_key (kv);
-		char *v = sdbkv_value (kv);
-		char *dup = strdup (k);
-		if ((flagname = strstr (dup, ".format"))) {
+#endif
+		} else if ((flagname = strstr (k, ".format"))) {
+		// 3
 			*flagname = 0;
 			if (!offset) {
 				offset = strdup ("0");
 			}
-			flagname = dup;
 			int fmtsize = r_print_format_struct_size (core->print, v, 0, 0);
-			char *offset_key = r_str_newf ("%s.offset", flagname);
+			char *offset_key = r_str_newf ("%s.offset", k);
 			const char *off = sdb_const_get (db, offset_key, 0);
 			if (fmtsize < 1) {
 				continue;
@@ -247,8 +255,11 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 			fmtsize += 4; // increase buffer to fix a bug in compuatation for pf.elf_header size doesnt harms other cases but should be fixed
 			free (offset_key);
 			if (off) {
+#if RUNSCRIPT
+				r_strbuf_appendf (s2, "Cf %d %s @ %s\n", fmtsize, v, off);
+#else
 				if (IS_MODE_RAD (mode)) {
-					r_cons_printf ("Cf %d %s @ %s\n", fmtsize, v, off);
+					r_strbuf_appendf (s2, "Cf %d %s @ %s\n", fmtsize, v, off);
 				} else if (IS_MODE_SET (mode)) {
 					ut64 addr = r_num_get (NULL, off);
 					ut8 *buf = malloc (fmtsize);
@@ -262,13 +273,14 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 						}
 					}
 				}
+#endif
 			}
-		}
-		if ((flagname = strstr (dup, ".size"))) {
-			*flagname = 0;
-			flagname = dup;
+		} else if ((flagname = strstr (k, ".size"))) {
+#if RUNSCRIPT
+			r_strbuf_appendf (s2, "fl %s %s\n", k, v);
+#else
 			if (IS_MODE_RAD (mode)) {
-				r_cons_printf ("fl %s %s\n", flagname, v);
+				r_strbuf_appendf (s2, "fl %s %s\n", flagname, v);
 			} else if (IS_MODE_SET (mode)) {
 				RFlagItem *fi = r_flag_get (core->flags, flagname);
 				if (fi) {
@@ -277,11 +289,22 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 					R_LOG_ERROR ("Cannot find flag named '%s'", flagname);
 				}
 			}
+#endif
 		}
-		free (dup);
 	}
-	free (offset);
+	R_FREE (offset);
 	ls_free (ls);
+	r_strbuf_append_strbuf (s0, s1);
+	r_strbuf_append_strbuf (s0, s2);
+	char *s = r_strbuf_drain (s0);
+	if (IS_MODE_RAD (mode)) {
+		r_cons_print (s);
+	} else if (IS_MODE_SET (mode)) {
+		r_core_cmd_lines (core, s);
+	}
+	free (s);
+	r_strbuf_free (s1);
+	r_strbuf_free (s2);
 	if (IS_MODE_SET (mode)) {
 		r_flag_space_pop (core->flags);
 	}
