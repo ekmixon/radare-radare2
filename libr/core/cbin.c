@@ -199,7 +199,9 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 				r_strbuf_appendf (s0, "f %s @ %s\n", k, v);
 			} else if (IS_MODE_SET (mode)) {
 				ut64 nv = r_num_math (core->num, v);
-				r_flag_set (core->flags, k, nv, 0);
+				if (!r_flag_get (core->flags, k)) {
+					r_flag_set (core->flags, k, nv, 0);
+				}
 			}
 #endif
 			free (offset);
@@ -280,14 +282,30 @@ R_API void r_core_bin_export_info(RCore *core, int mode) {
 			r_strbuf_appendf (s2, "fl %s %s\n", k, v);
 #else
 			if (IS_MODE_RAD (mode)) {
-				r_strbuf_appendf (s2, "fl %s %s\n", flagname, v);
+				r_strbuf_appendf (s2, "fl %s %s\n", k, v);
 			} else if (IS_MODE_SET (mode)) {
-				RFlagItem *fi = r_flag_get (core->flags, flagname);
+#if 0
+				char *s = r_core_cmd_str ("k bin/cur/pe_overlay.size");
+				free (s);
+#else
+				RFlagItem *fi = r_flag_get (core->flags, k);
 				if (fi) {
 					fi->size = r_num_math (core->num, v);
 				} else {
-					R_LOG_ERROR ("Cannot find flag named '%s'", flagname);
+					char *s = strdup (k);
+					char *kk = r_str_replace (s, ".size", ".offset", 0);
+					const char *addr = sdb_const_get (db, kk, 0);
+					if (R_STR_ISEMPTY (addr)) {
+						R_LOG_ERROR ("Cannot find flag named '%s'", k);
+					} else {
+						ut64 naddr = r_num_math (NULL, addr);
+						ut64 size = r_num_math (NULL, v);
+						r_flag_set (core->flags, k, naddr, size);
+						// r_core_cmdf (core, "fl %s %s@%s", k, v, addr);
+					}
+					free (kk);
 				}
+#endif
 			}
 #endif
 		}
