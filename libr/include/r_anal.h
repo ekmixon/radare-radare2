@@ -895,7 +895,7 @@ R_API RList *r_anal_get_blocks_intersect(RAnal *anal, ut64 addr, ut64 size); // 
 
 // Call cb on every direct successor address of block
 // returns false if the loop was breaked by cb
-R_API bool r_anal_block_successor_addrs_foreach(RAnalBlock *block, RAnalAddrCb cb, void *user);
+R_API void r_anal_block_successor_addrs_foreach(RAnalBlock *block, RAnalAddrCb cb, void *user);
 
 // Call cb on block and every (recursive) successor of it
 // returns false if the loop was breaked by cb
