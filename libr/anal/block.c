@@ -45,9 +45,12 @@ static int __bb_addr_cmp(const void *incoming, const RBNode *in_tree, void *user
 #define D if (anal && anal->verbose)
 
 R_API void r_anal_block_ref(RAnalBlock *bb) {
-	// 0-refd must already be freed.
-	r_return_if_fail (bb->ref > 0);
-	bb->ref++;
+	// XXX we have R_REF for this
+	if (bb) {
+		// 0-refd must already be freed.
+		r_return_if_fail (bb->ref > 0);
+		bb->ref++;
+	}
 }
 
 #define DFLT_NINSTR 3
@@ -756,6 +759,9 @@ static void noreturn_successor_free(HtUPKv *kv) {
 }
 
 static bool noreturn_successors_cb(RAnalBlock *block, void *user) {
+	if (!block) {
+		return false;
+	}
 	HtUP *succs = user;
 	NoreturnSuccessor *succ = R_NEW0 (NoreturnSuccessor);
 	if (!succ) {
@@ -769,6 +775,9 @@ static bool noreturn_successors_cb(RAnalBlock *block, void *user) {
 }
 
 static bool noreturn_successors_reachable_cb(RAnalBlock *block, void *user) {
+	if (!block) {
+		return false;
+	}
 	HtUP *succs = user;
 	NoreturnSuccessor *succ = ht_up_find (succs, block->addr, NULL);
 	if (succ) {
