@@ -1,5 +1,7 @@
 import sys
 
+import sys
+
 if len(sys.argv)!=2:
     print "Usage:"
     print "   First run 'dumpbin /exports your_file.dll/.lib > your_file_dumpbin.txt'"
@@ -16,12 +18,12 @@ for l in d:
     desc = ls[1]
     desc = desc.split("(", 1)
     if len(desc) <= 1:
-        sys.stderr.write("Warning, skipping line: " + l + "\n")
+        sys.stderr.write(f"Warning, skipping line: {l}" + "\n")
         continue
     rawname = desc[0].strip()
     desc = desc[1].strip()
     if desc[-1] != ')':
-        sys.stderr.write("Warning, skipping line: " + l + "\n")
+        sys.stderr.write(f"Warning, skipping line: {l}" + "\n")
         continue
     fulldesc = desc[:-1].strip()
     desc = fulldesc
@@ -33,10 +35,10 @@ for l in d:
     if len(desc)>1:
         desc = desc[1]
         desc = desc.split(')')
-        if len(desc)>1:
-            post = desc[-1].strip()
+    if len(desc)>1:
+        post = desc[-1].strip()
     if post != "":
-        sys.stderr.write("Warning, skipping line: " + l + "\n")
+        sys.stderr.write(f"Warning, skipping line: {l}" + "\n")
         continue
     desc = pre
     i = len(desc) - 1
@@ -54,4 +56,5 @@ for l in d:
             continue
         break
     desc = desc[i+1:]
+    ls = l.split(None, 1)
     print ordinal+"="+desc
