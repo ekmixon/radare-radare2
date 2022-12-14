@@ -15,10 +15,10 @@ import r2pipe, json, re
 
 r = r2pipe.open('#!pipe')
 
-def walk_back_until (addr, pattern, min_addr):
+def walk_back_until(addr, pattern, min_addr):
     cursor = addr
     while cursor >= min_addr:
-        op = r.cmdj('aoj@' + str(cursor))[0]['opcode']
+        op = r.cmdj(f'aoj@{str(cursor)}')[0]['opcode']
         if re.search(pattern, op) != None:
             return cursor + 4
         if re.search(r'^ret', op) != None:
@@ -29,35 +29,36 @@ def walk_back_until (addr, pattern, min_addr):
 
     return min_addr
 
-def carve_trap_num (addr, flag):
+def carve_trap_num(addr, flag):
     saved_seek = r.cmd('?v $$')
     r.cmd('e io.cache=true')
     r.cmd('e emu.write=true')
     r.cmd('aei')
     r.cmd('aeim')
-    min_addr = int(r.cmd('?v ' + flag), 0)
+    min_addr = int(r.cmd(f'?v {flag}'), 0)
     emu_start = walk_back_until(addr - 4, r'^b|^ret|^invalid', min_addr)
-    r.cmd('s ' + str(emu_start))
+    r.cmd(f's {str(emu_start)}')
     obj = r.cmd('aefa 0x%08x~[0]:0' % addr)
-    r.cmd('s ' + saved_seek)
-    val = r.cmdj('pv4j@%s+0x14' % obj)['value']
+    r.cmd(f's {saved_seek}')
+    val = r.cmdj(f'pv4j@{obj}+0x14')['value']
     if val == 0:
-        val = r.cmdj('pv4j@%s+0x18' % obj)['value']
+        val = r.cmdj(f'pv4j@{obj}+0x18')['value']
     return val
 
 def beautify_name (name):
     return re.sub(r'^_', '', name)
 
-def carve_traps ():
+def carve_traps():
     msgs = r.cmdj('axtj sym._mach_msg')
     if len(msgs) == 0:
         r.cmd('s sym._mach_msg')
         r.cmd('aae $SS @ $S')
         r.cmd('s-')
         msgs = r.cmdj('axtj sym._mach_msg')
-        if len(msgs) == 0:
-            print 'Cannot find refs to mach_msg!'
-            return
+    msgs = r.cmdj('axtj sym._mach_msg')
+    if len(msgs) == 0:
+        print 'Cannot find refs to mach_msg!'
+        return
 
     traps = {}
     for ref in msgs:
@@ -72,9 +73,8 @@ def carve_traps ():
         }
 
     result = []
-    for addr in traps:
-        trap = traps[addr]
-        flag = 'sym.%s' % trap['name']
+    for addr, trap in traps.items():
+        flag = f"sym.{trap['name']}"
         trap['name'] = beautify_name(trap['name'])
         trap['num'] = carve_trap_num(addr, flag)
         if trap['num'] != None:
