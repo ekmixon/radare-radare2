@@ -484,7 +484,6 @@ R_API bool r_anal_block_recurse(RAnalBlock *block, RAnalBlockCb cb, void *user) 
 		}
 		r_anal_block_successor_addrs_foreach (cur, block_recurse_successor_cb, ctx);
 	}
-beach:
 	recurse_context_free (ctx);
 	return !breaked;
 }
